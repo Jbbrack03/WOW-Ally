@@ -1,20 +1,19 @@
 #include <windows.h>
 #include <iostream>
-#include <string> // Required for std::string and std::getline
+#include <string> // Still useful for potential future input, though not strictly for the loop
 
 // Define a function pointer type for our exported DLL function
 typedef void (*ProcessControllerInputFunc)();
 
 int main() {
-    HINSTANCE hDll = LoadLibrary("AllyMapperPoC.dll"); // Updated DLL name
+    HINSTANCE hDll = LoadLibrary("AllyMapperPoC.dll");
 
     if (!hDll) {
         std::cerr << "Could not load AllyMapperPoC.dll! Error code: " << GetLastError() << std::endl;
         return 1;
     }
 
-    // Resolve function address here
-    ProcessControllerInputFunc processInput = (ProcessControllerInputFunc)GetProcAddress(hDll, "ProcessControllerInputAndSendEvents"); // Updated function name
+    ProcessControllerInputFunc processInput = (ProcessControllerInputFunc)GetProcAddress(hDll, "ProcessControllerInputAndSendEvents");
     if (!processInput) {
         std::cerr << "Could not find function ProcessControllerInputAndSendEvents in DLL! Error code: " << GetLastError() << std::endl;
         FreeLibrary(hDll);
@@ -22,43 +21,34 @@ int main() {
     }
 
     std::cout << "AllyMapperPoC.dll loaded successfully." << std::endl;
-    std::cout << "The DLL will now attempt to translate controller input to keyboard/mouse events." << std::endl;
-    std::cout << "Switch to a target application (e.g., Notepad, WoW)." << std::endl;
-    std::cout << " - Controller 'A' button should send Spacebar." << std::endl;
-    std::cout << " - Controller D-Pad Up should send 'W' key." << std::endl;
-    std::cout << " - Controller Right Stick should move the mouse cursor." << std::endl;
-    std::cout << "Press Enter in this window to process input once, or type 'q' and Enter to quit." << std::endl;
-    std::cout << "For continuous processing, you'd typically call this in a loop (e.g., from a game engine or a dedicated thread)." << std::endl;
+    std::cout << "DLL will now continuously translate controller input to keyboard/mouse events." << std::endl;
+    std::cout << "Switch to your target application (e.g., Notepad, WoW)." << std::endl;
+    std::cout << "Press Ctrl+C in this window or close it to quit." << std::endl;
+    std::cout << "Expected basic mappings for testing:" << std::endl;
+    std::cout << "  - Left Stick: W, A, S, D" << std::endl;
+    std::cout << "  - Right Stick: Mouse Movement" << std::endl;
+    std::cout << "  - A Button (Xbox): F11 key" << std::endl;
+    std::cout << "  - D-Pad Up: F1 key" << std::endl;
+    std::cout << "  - Left Trigger: Left Shift (modifier)" << std::endl;
+    std::cout << "----------------------------------------------------" << std::endl;
 
-    std::string input_line;
+    // Continuous polling loop
     while (true) {
-        // In a real scenario, processInput() would be called very frequently (e.g., every game frame or on a timer)
-        // For this test app, we call it on demand or in a fast loop after a single Enter press.
-        
-        // To make it poll continuously after one Enter press (more like a real mapper):
-        // std::cout << "Press Enter to START polling, then 'q' and Enter in this window to STOP." << std::endl;
-        // std::getline(std::cin, input_line);
-        // if (input_line == "q") break;
-        // std::cout << "Polling started... switch to target window. Type 'q' and Enter here to stop." << std::endl;
-        // while(true) {
-        //    processInput();
-        //    Sleep(16); // Poll roughly 60 times per second
-        //    // Check for quit condition without blocking, e.g., PeekConsoleInput or a separate input thread.
-        //    // For simplicity, this inner loop would need a more robust exit mechanism in a real app.
-        //    // Or, just let it run and close the console window to stop.
-        // }
-        
-        std::cout << "Press Enter to process controller input and send events (or q to quit): ";
-        std::getline(std::cin, input_line);
-        if (input_line == "q" || input_line == "Q") {
-            break;
-        }
         processInput(); // Call the function from the DLL
-        // No direct output to check here, observe behavior in the target application.
+        Sleep(16);      // Poll roughly 60 times per second (1000ms / 60hz ~= 16ms)
+                        // Adjust timing if needed (e.g., Sleep(33) for ~30hz)
+        
+        // To make this truly robust for a real application, you might add
+        // a way to signal this loop to terminate gracefully, e.g., by checking
+        // a global flag that could be set by another thread or a console input handler.
+        // For this PoC, Ctrl+C in the console or closing the window is the way to stop.
     }
-    
-    FreeLibrary(hDll);
-    std::cout << "DLL Unloaded. Exiting." << std::endl;
 
-    return 0;
+    // The following lines will not be reached in this simple continuous loop model
+    // unless the loop is broken by some other means (e.g. an error inside processInput if it could terminate the app).
+    // In a more complete app, you'd ensure FreeLibrary is called on exit.
+    // FreeLibrary(hDll); 
+    // std::cout << "DLL Unloaded. Exiting." << std::endl;
+
+    return 0; 
 } 
