@@ -108,8 +108,6 @@ extern "C" __declspec(dllexport) void ProcessControllerInputAndSendEvents() {
         ManageButtonState(XINPUT_GAMEPAD_RIGHT_SHOULDER, VK_F8, currentState, g_prevState); // RB -> F8
 
         // Triggers as Modifiers
-        ManageButtonState(XINPUT_GAMEPAD_LEFT_TRIGGER > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? XINPUT_GAMEPAD_LEFT_TRIGGER : 0, VK_LSHIFT, currentState, g_prevState); // LT -> LShift
-        ManageButtonState(XINPUT_GAMEPAD_RIGHT_TRIGGER > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? XINPUT_GAMEPAD_RIGHT_TRIGGER : 0, VK_LCONTROL, currentState, g_prevState); // RT -> LControl
         // Note: Direct XINPUT_GAMEPAD_LEFT_TRIGGER in ManageButtonState won't work as it's not a bitmask. 
         // A refined ManageButtonState for triggers or direct handling is needed.
         // For now, this is a placeholder logic for triggers and will need fixing.
@@ -123,7 +121,6 @@ extern "C" __declspec(dllexport) void ProcessControllerInputAndSendEvents() {
         bool prevRtPressed = g_prevState.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
         if (rtPressed && !prevRtPressed) SendScanKeyEvent(VK_LCONTROL, true);
         else if (!rtPressed && prevRtPressed) SendScanKeyEvent(VK_LCONTROL, false);
-
 
         // Start/Back Buttons
         ManageButtonState(XINPUT_GAMEPAD_START, VK_F6, currentState, g_prevState);      // Start -> F6 (CP_X_RIGHT)
