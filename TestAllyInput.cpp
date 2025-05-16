@@ -1,54 +1,98 @@
 #include <windows.h>
 #include <iostream>
-#include <string> // Still useful for potential future input, though not strictly for the loop
+#include <string>
+#include <tlhelp32.h> // Required for process snapshotting
 
 // Define a function pointer type for our exported DLL function
 typedef void (*ProcessControllerInputFunc)();
 
+// Function to check if Wow.exe is running
+bool IsWowProcessRunning() {
+    PROCESSENTRY32 pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32);
+    HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    if (hProcessSnap == INVALID_HANDLE_VALUE) {
+        // Optionally, log an error or handle it. For now, assume not running.
+        return false;
+    }
+
+    if (Process32First(hProcessSnap, &pe32)) {
+        do {
+            // Compare process name (case-insensitive)
+            if (_wcsicmp(pe32.szExeFile, L"Wow.exe") == 0) {
+                CloseHandle(hProcessSnap);
+                return true;
+            }
+        } while (Process32Next(hProcessSnap, &pe32));
+    }
+
+    CloseHandle(hProcessSnap);
+    return false;
+}
+
 int main() {
-    HINSTANCE hDll = LoadLibrary("AllyMapperPoC.dll");
+    HINSTANCE hDll = NULL;
+    ProcessControllerInputFunc processInput = NULL;
+    bool dllLoaded = false;
 
-    if (!hDll) {
-        std::cerr << "Could not load AllyMapperPoC.dll! Error code: " << GetLastError() << std::endl;
-        return 1;
+    std::cout << "TestAllyInput: Waiting for Wow.exe to start..." << std::endl;
+
+    while (true) { // Outer loop: monitors WoW process state
+        if (IsWowProcessRunning()) {
+            if (!dllLoaded) {
+                hDll = LoadLibrary("AllyMapperPoC.dll");
+                if (!hDll) {
+                    std::cerr << "Could not load AllyMapperPoC.dll! Error code: " << GetLastError() << std::endl;
+                    Sleep(5000); // Wait before retrying WoW check or DLL load
+                    continue;    // Go back to checking if WoW is running
+                }
+
+                processInput = (ProcessControllerInputFunc)GetProcAddress(hDll, "ProcessControllerInputAndSendEvents");
+                if (!processInput) {
+                    std::cerr << "Could not find function ProcessControllerInputAndSendEvents in DLL! Error code: " << GetLastError() << std::endl;
+                    FreeLibrary(hDll);
+                    hDll = NULL;
+                    Sleep(5000);
+                    continue;
+                }
+                std::cout << "TestAllyInput: Wow.exe detected. AllyMapperPoC.dll loaded. Controller input active." << std::endl;
+                dllLoaded = true;
+            }
+
+            // WoW is running and DLL is loaded, process input
+            if (processInput) {
+                processInput();
+            }
+            Sleep(16); // Approx 60 FPS polling
+
+        } else { // Wow.exe is not running
+            if (dllLoaded) {
+                std::cout << "TestAllyInput: Wow.exe closed or not found. Deactivating controller input." << std::endl;
+                if (hDll) {
+                    FreeLibrary(hDll);
+                    hDll = NULL;
+                }
+                processInput = NULL;
+                dllLoaded = false;
+            }
+            // No need to print "waiting" every 5 seconds if it was already printed or just closed.
+            // A single message when it first starts waiting and when WoW closes is enough.
+            // However, to prevent a tight loop if it was already waiting, add a sleep.
+            if (!dllLoaded) { // Only print waiting if we haven't just unloaded the DLL.
+                 // To avoid spamming, let's only print if it was not running in the previous check.
+                 // This needs a 'wasWowRunning' flag, or simply accept a small delay in printing "Waiting...".
+                 // For simplicity, we'll just let it sleep. The main message is printed at startup.
+            }
+            Sleep(5000); // Check for Wow.exe every 5 seconds
+        }
     }
 
-    ProcessControllerInputFunc processInput = (ProcessControllerInputFunc)GetProcAddress(hDll, "ProcessControllerInputAndSendEvents");
-    if (!processInput) {
-        std::cerr << "Could not find function ProcessControllerInputAndSendEvents in DLL! Error code: " << GetLastError() << std::endl;
+    // Cleanup if the loop somehow exits (e.g., manual termination of TestAllyInput)
+    // This part is less likely to be reached with the current infinite outer loop.
+    if (hDll) {
         FreeLibrary(hDll);
-        return 1;
     }
 
-    std::cout << "AllyMapperPoC.dll loaded successfully." << std::endl;
-    std::cout << "DLL will now continuously translate controller input to keyboard/mouse events." << std::endl;
-    std::cout << "Switch to your target application (e.g., Notepad, WoW)." << std::endl;
-    std::cout << "Press Ctrl+C in this window or close it to quit." << std::endl;
-    std::cout << "Expected basic mappings for testing:" << std::endl;
-    std::cout << "  - Left Stick: W, A, S, D" << std::endl;
-    std::cout << "  - Right Stick: Mouse Movement" << std::endl;
-    std::cout << "  - A Button (Xbox): F11 key" << std::endl;
-    std::cout << "  - D-Pad Up: F1 key" << std::endl;
-    std::cout << "  - Left Trigger: Left Shift (modifier)" << std::endl;
-    std::cout << "----------------------------------------------------" << std::endl;
-
-    // Continuous polling loop
-    while (true) {
-        processInput(); // Call the function from the DLL
-        Sleep(16);      // Poll roughly 60 times per second (1000ms / 60hz ~= 16ms)
-                        // Adjust timing if needed (e.g., Sleep(33) for ~30hz)
-        
-        // To make this truly robust for a real application, you might add
-        // a way to signal this loop to terminate gracefully, e.g., by checking
-        // a global flag that could be set by another thread or a console input handler.
-        // For this PoC, Ctrl+C in the console or closing the window is the way to stop.
-    }
-
-    // The following lines will not be reached in this simple continuous loop model
-    // unless the loop is broken by some other means (e.g. an error inside processInput if it could terminate the app).
-    // In a more complete app, you'd ensure FreeLibrary is called on exit.
-    // FreeLibrary(hDll); 
-    // std::cout << "DLL Unloaded. Exiting." << std::endl;
-
-    return 0; 
+    return 0;
 } 
