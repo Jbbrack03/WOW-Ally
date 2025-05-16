@@ -126,16 +126,16 @@ extern "C" __declspec(dllexport) void ProcessControllerInputAndSendEvents() {
         ManageButtonState(XINPUT_GAMEPAD_START, VK_F6, currentState, g_prevState);      // Start -> F6 (CP_X_RIGHT)
         ManageButtonState(XINPUT_GAMEPAD_BACK, VK_F5, currentState, g_prevState);       // Back  -> F5 (CP_X_LEFT)
 
-        // Stick Clicks (Updated based on ConsolePort.lua)
+        // Stick Clicks (Reverted to Mouse Buttons as per user request)
         bool lStickClick = (currentState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB);
         bool prevLStickClick = (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB);
-        if (lStickClick && !prevLStickClick) SendScanKeyEvent(VK_DIVIDE, true);    // L3 -> NumpadDivide (TOGGLERUN)
-        else if (!lStickClick && prevLStickClick) SendScanKeyEvent(VK_DIVIDE, false);
+        if (lStickClick && !prevLStickClick) SendMouseButtonEvent(MOUSEEVENTF_LEFTDOWN);    // L3 -> Left Mouse Click
+        else if (!lStickClick && prevLStickClick) SendMouseButtonEvent(MOUSEEVENTF_LEFTUP);
 
         bool rStickClick = (currentState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB);
         bool prevRStickClick = (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB);
-        if (rStickClick && !prevRStickClick) SendScanKeyEvent(VK_MULTIPLY, true);  // R3 -> NumpadMultiply (CP_X_CENTER)
-        else if (!rStickClick && prevRStickClick) SendScanKeyEvent(VK_MULTIPLY, false);
+        if (rStickClick && !prevRStickClick) SendMouseButtonEvent(MOUSEEVENTF_RIGHTDOWN);  // R3 -> Right Mouse Click
+        else if (!rStickClick && prevRStickClick) SendMouseButtonEvent(MOUSEEVENTF_RIGHTUP);
         
         // Left Analog Stick for Movement (W, A, S, D)
         ManageStickToKey(currentState.Gamepad.sThumbLY, ANALOG_STICK_DEADZONE_LEFT, 'W', 'S', currentState, g_prevState, true); // Y-axis: W/S
@@ -163,11 +163,11 @@ extern "C" __declspec(dllexport) void ProcessControllerInputAndSendEvents() {
         SendScanKeyEvent(VK_F1, false); SendScanKeyEvent(VK_F3, false); SendScanKeyEvent(VK_F4, false); SendScanKeyEvent(VK_F2, false); // D-Pad F-keys
         SendScanKeyEvent(VK_F7, false); SendScanKeyEvent(VK_F8, false); SendScanKeyEvent(VK_LSHIFT, false); SendScanKeyEvent(VK_LCONTROL, false);
         SendScanKeyEvent(VK_F6, false); SendScanKeyEvent(VK_F5, false);
-        SendScanKeyEvent(VK_DIVIDE, false); SendScanKeyEvent(VK_MULTIPLY, false); // Stick Clicks
+        // SendScanKeyEvent(VK_DIVIDE, false); SendScanKeyEvent(VK_MULTIPLY, false); // No longer Numpad keys for stick clicks
+        // Ensure mouse buttons are up if they were pressed by stick clicks
+        if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_LEFTUP);
+        if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_RIGHTUP);
         SendScanKeyEvent('W', false); SendScanKeyEvent('A', false); SendScanKeyEvent('S', false); SendScanKeyEvent('D', false);
-        // Ensure mouse buttons are up (though they are not mapped from sticks anymore)
-        // if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_LEFTUP); // No longer mouse
-        // if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_RIGHTUP); // No longer mouse
         ZeroMemory(&g_prevState, sizeof(XINPUT_STATE));
     }
     g_prevControllerConnected = currentControllerConnected;
@@ -189,10 +189,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             SendScanKeyEvent(VK_F1, false); SendScanKeyEvent(VK_F3, false); SendScanKeyEvent(VK_F4, false); SendScanKeyEvent(VK_F2, false); // D-Pad F-keys
             SendScanKeyEvent(VK_F7, false); SendScanKeyEvent(VK_F8, false); SendScanKeyEvent(VK_LSHIFT, false); SendScanKeyEvent(VK_LCONTROL, false);
             SendScanKeyEvent(VK_F6, false); SendScanKeyEvent(VK_F5, false);
-            SendScanKeyEvent(VK_DIVIDE, false); SendScanKeyEvent(VK_MULTIPLY, false); // Stick Clicks
+            // SendScanKeyEvent(VK_DIVIDE, false); SendScanKeyEvent(VK_MULTIPLY, false); // No longer Numpad keys
+            if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_LEFTUP);
+            if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_RIGHTUP);
             SendScanKeyEvent('W', false); SendScanKeyEvent('A', false); SendScanKeyEvent('S', false); SendScanKeyEvent('D', false);
-            // if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_LEFTUP); // No longer mouse
-            // if (g_prevState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) SendMouseButtonEvent(MOUSEEVENTF_RIGHTUP); // No longer mouse
         }
         break;
     case DLL_THREAD_ATTACH:
