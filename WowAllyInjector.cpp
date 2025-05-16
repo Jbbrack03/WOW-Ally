@@ -1,11 +1,11 @@
+#define WIN32_LEAN_AND_MEAN // Keep this for general Windows programming
 #include <windows.h>
-#include <iostream>
+// Removed iostream as we are making it silent. For logging, we'd need a different approach.
 #include <string>
-#include <tlhelp32.h> // Required for process snapshotting
-#include <vector>      // For storing DLL path as wchar_t
-#include <filesystem>  // For getting full path
+#include <tlhelp32.h> 
+#include <filesystem> 
 
-// Function to get Wow.exe PID
+// Function to get Wow.exe PID (remains largely the same, error reporting would change if logging was added)
 DWORD GetWowProcessId() {
     PROCESSENTRY32 pe32;
     pe32.dwSize = sizeof(PROCESSENTRY32);
@@ -24,7 +24,6 @@ DWORD GetWowProcessId() {
     return 0;
 }
 
-// Gets the full path of the DLL, assuming it's in the same directory as the injector
 std::wstring GetDllPath() {
     wchar_t buffer[MAX_PATH];
     GetModuleFileNameW(NULL, buffer, MAX_PATH);
@@ -34,97 +33,90 @@ std::wstring GetDllPath() {
 
 bool InjectDll(DWORD processId, const std::wstring& dllPath) {
     if (!std::filesystem::exists(dllPath)) {
-        std::wcerr << L"Injector: AllyMapperPoC.dll not found at: " << dllPath << std::endl;
+        // Error: DLL not found. In a silent app, this would fail without user notification
+        // unless we implement file logging or another error reporting mechanism.
         return false;
     }
 
     HANDLE hWowProcess = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, processId);
-    if (hWowProcess == NULL) {
-        std::cerr << "Injector: Could not open Wow.exe process (PID: " << processId << "). Error: " << GetLastError() << std::endl;
-        return false;
-    }
+    if (hWowProcess == NULL) return false; // Error: Could not open process
 
     size_t dllPathSize = (dllPath.length() + 1) * sizeof(wchar_t);
     LPVOID pRemoteDllPath = VirtualAllocEx(hWowProcess, NULL, dllPathSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (pRemoteDllPath == NULL) {
-        std::cerr << "Injector: Could not allocate memory in Wow.exe. Error: " << GetLastError() << std::endl;
         CloseHandle(hWowProcess);
-        return false;
+        return false; // Error: Could not allocate memory
     }
 
     if (!WriteProcessMemory(hWowProcess, pRemoteDllPath, dllPath.c_str(), dllPathSize, NULL)) {
-        std::cerr << "Injector: Could not write DLL path to Wow.exe memory. Error: " << GetLastError() << std::endl;
         VirtualFreeEx(hWowProcess, pRemoteDllPath, 0, MEM_RELEASE);
         CloseHandle(hWowProcess);
-        return false;
+        return false; // Error: Could not write memory
     }
 
     HMODULE hKernel32 = GetModuleHandle(L"kernel32.dll");
     FARPROC pLoadLibraryW = GetProcAddress(hKernel32, "LoadLibraryW");
     if (pLoadLibraryW == NULL) {
-        std::cerr << "Injector: Could not get address of LoadLibraryW. Error: " << GetLastError() << std::endl;
         VirtualFreeEx(hWowProcess, pRemoteDllPath, 0, MEM_RELEASE);
         CloseHandle(hWowProcess);
-        return false;
+        return false; // Error: Could not get LoadLibraryW address
     }
 
     HANDLE hRemoteThread = CreateRemoteThread(hWowProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pLoadLibraryW, pRemoteDllPath, 0, NULL);
     if (hRemoteThread == NULL) {
-        std::cerr << "Injector: Could not create remote thread in Wow.exe. Error: " << GetLastError() << std::endl;
         VirtualFreeEx(hWowProcess, pRemoteDllPath, 0, MEM_RELEASE);
         CloseHandle(hWowProcess);
-        return false;
+        return false; // Error: Could not create remote thread
     }
-
-    // Don't wait for remote thread indefinitely, but give it a moment. 
-    // If LoadLibraryW hangs for some reason in the target, we don't want the injector to hang.
-    // WaitForSingleObject(hRemoteThread, 2000); // Wait up to 2 seconds
 
     CloseHandle(hRemoteThread);
     VirtualFreeEx(hWowProcess, pRemoteDllPath, 0, MEM_RELEASE); 
     CloseHandle(hWowProcess);
-    std::wcout << L"Injector: Successfully initiated injection of " << dllPath << L" into Wow.exe (PID: " << processId << L")" << std::endl;
+    // Success: In a silent app, this just means it worked. No output.
     return true;
 }
 
-int main() {
-    std::cout << "WoW Ally Injector: Starting. Will monitor for Wow.exe." << std::endl;
-    std::cout << "This window can be minimized. Close it to stop the injector." << std::endl;
+// Entry point for a Windows (non-console) application
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     std::wstring dllPath = GetDllPath();
     bool wowIsRunning = false;
     DWORD lastWowPid = 0;
 
     if (!std::filesystem::exists(dllPath)) {
-        std::wcerr << L"CRITICAL ERROR: AllyMapperPoC.dll not found at expected location: " << dllPath << std::endl;
-        std::wcerr << L"Injector cannot function and will exit. Ensure AllyMapperPoC.dll is in the same directory as this injector." << std::endl;
-        Sleep(10000);
-        return 1;
+        // CRITICAL ERROR: DLL not found. Injector cannot function.
+        // In a silent app, this means it will just exit or fail to start properly.
+        // For robustness, an installer should ensure the DLL is present.
+        return 1; // Exit if DLL is critically missing
+    }
+
+    // Prevent multiple instances of the injector (optional but good practice)
+    HANDLE hMutex = CreateMutex(NULL, TRUE, L"WoWAllyInjectorMutex");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        // Another instance is already running
+        if(hMutex) CloseHandle(hMutex);
+        return 0; // Exit silently
     }
 
     while (true) {
         DWORD currentWowPid = GetWowProcessId();
 
-        if (currentWowPid != 0) { // Wow.exe is currently running
+        if (currentWowPid != 0) { 
             if (!wowIsRunning || currentWowPid != lastWowPid) {
-                // WoW just started, or PID changed (e.g. game restarted)
-                std::cout << "Injector: Wow.exe detected (PID: " << currentWowPid << "). Attempting to inject DLL..." << std::endl;
-                if (InjectDll(currentWowPid, dllPath)) {
-                    std::cout << "Injector: DLL injected. Monitoring Wow.exe for exit." << std::endl;
-                } else {
-                    std::cout << "Injector: DLL injection failed. Will retry if Wow.exe restarts." << std::endl;
-                }
+                InjectDll(currentWowPid, dllPath);
+                // No console output for success/failure here in a silent app
                 wowIsRunning = true;
                 lastWowPid = currentWowPid;
             }
-        } else { // Wow.exe is not currently running
+        } else { 
             if (wowIsRunning) {
-                // WoW just closed
-                std::cout << "Injector: Wow.exe (PID: " << lastWowPid << ") closed. Waiting for it to start again." << std::endl;
                 wowIsRunning = false;
                 lastWowPid = 0;
             }
         }
-        Sleep(3000); // Poll every 3 seconds
+        Sleep(3000); 
     }
+
+    // Cleanup mutex if loop somehow exits (not expected in this design)
+    if(hMutex) CloseHandle(hMutex);
     return 0; // Should not be reached
 } 

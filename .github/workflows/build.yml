@@ -36,7 +36,7 @@ jobs:
       shell: msys2 {0}
       run: |
         echo "Compiling WowAllyInjector.exe..."
-        g++ -m32 -o WowAllyInjector.exe WowAllyInjector.cpp -static-libgcc -static-libstdc++ -std=c++17 -lstdc++fs
+        g++ -m32 -o WowAllyInjector.exe WowAllyInjector.cpp -static-libgcc -static-libstdc++ -std=c++17 -lstdc++fs -mwindows
         if [ $? -ne 0 ]; then
           echo "Injector Compilation failed!"
           exit 1
