@@ -25,7 +25,7 @@ jobs:
       shell: msys2 {0} # Use msys2 shell and specify 32-bit mingw environment
       run: |
         echo "Compiling AllyMapperPoC.dll..."
-        g++ -shared -m32 -o AllyMapperPoC.dll AllyMapperPoC.cpp -lxinput -luser32 -static-libgcc -static-libstdc++ -DMSYS2
+        g++ -shared -m32 -o AllyMapperPoC.dll AllyMapperPoC.cpp -lxinput -luser32 -static-libgcc -static-libstdc++
         if [ $? -ne 0 ]; then
           echo "DLL Compilation failed!"
           exit 1
@@ -36,12 +36,22 @@ jobs:
       shell: msys2 {0}
       run: |
         echo "Compiling TestAllyInput.exe..."
-        g++ -m32 -o TestAllyInput.exe TestAllyInput.cpp -static-libgcc -static-libstdc++ -DMSYS2
+        g++ -m32 -o TestAllyInput.exe TestAllyInput.cpp -static-libgcc -static-libstdc++
         if [ $? -ne 0 ]; then
           echo "Test Executable Compilation failed!"
           exit 1
         fi
         echo "TestAllyInput.exe compiled successfully."
+
+    - name: Copy MinGW Runtime DLLs
+      shell: msys2 {0}
+      run: |
+        echo "Copying required MinGW runtime DLLs..."
+        cp /mingw32/bin/libwinpthread-1.dll .
+        # Copying these as a precaution, though they should be statically linked by flags
+        cp /mingw32/bin/libgcc_s_dw2-1.dll .
+        cp /mingw32/bin/libstdc++-6.dll .
+        echo "DLLs copied."
 
     - name: List output files
       run: |
@@ -55,4 +65,7 @@ jobs:
         name: WowAllyMapper-PoC-Build
         path: |
           AllyMapperPoC.dll
-          TestAllyInput.exe 
+          TestAllyInput.exe
+          libwinpthread-1.dll
+          libgcc_s_dw2-1.dll
+          libstdc++-6.dll 
