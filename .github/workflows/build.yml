@@ -1,0 +1,58 @@
+name: C++ CI Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW32 # For 32-bit compilation
+        update: true
+        install: >-
+          mingw-w64-i686-toolchain
+
+    - name: Compile DLL
+      shell: msys2 {0} # Use msys2 shell and specify 32-bit mingw environment
+      run: |
+        echo "Compiling AllyMapperPoC.dll..."
+        g++ -shared -m32 -o AllyMapperPoC.dll AllyMapperPoC.cpp -lxinput -luser32 -static-libgcc -static-libstdc++ -DMSYS2
+        if [ $? -ne 0 ]; then
+          echo "DLL Compilation failed!"
+          exit 1
+        fi
+        echo "AllyMapperPoC.dll compiled successfully."
+
+    - name: Compile Test Executable
+      shell: msys2 {0}
+      run: |
+        echo "Compiling TestAllyInput.exe..."
+        g++ -m32 -o TestAllyInput.exe TestAllyInput.cpp -static-libgcc -static-libstdc++ -DMSYS2
+        if [ $? -ne 0 ]; then
+          echo "Test Executable Compilation failed!"
+          exit 1
+        fi
+        echo "TestAllyInput.exe compiled successfully."
+
+    - name: List output files
+      run: |
+        echo "Output files:"
+        dir
+      shell: cmd
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: WowAllyMapper-PoC-Build
+        path: |
+          AllyMapperPoC.dll
+          TestAllyInput.exe 
